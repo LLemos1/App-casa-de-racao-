@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Casa de Ração - Simulador de Vendas</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; background: #f4f1ea; margin: 0; padding: 16px; color: #2b2b2b; }
+  .container { max-width: 900px; margin: 0 auto; display: grid; gap: 16px; }
+  h1 { margin: 0; font-size: 1.5rem; }
+  h2 { margin: 0 0 12px; font-size: 1.15rem; }
+  .card { background: #fff; border-radius: 10px; padding: 16px; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
+  .linha { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  input, select, button { padding: 10px; font-size: 1rem; border-radius: 6px; border: 1px solid #bbb; }
+  input[type="number"] { width: 90px; }
+  button { background: #2e7d32; color: #fff; border: none; cursor: pointer; }
+  button.sec { background: #888; }
+  button.perigo { background: #c62828; }
+  .tabela { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 8px; text-align: left; border-bottom: 1px solid #eee; font-size: .95rem; }
+  .total { font-size: 1.2rem; font-weight: bold; margin: 8px 0 12px; }
+  .vazio { color: #888; font-style: italic; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🐾 Casa de Ração — Simulador de Vendas</h1>
+
+  <!-- NOVA VENDA -->
+  <div class="card">
+    <h2>Nova venda</h2>
+    <div class="linha">
+      <select id="produto"></select>
+      <input type="number" id="qtd" value="1" min="1">
+      <button onclick="adicionar()">Adicionar</button>
+    </div>
+
+    <div class="tabela">
+      <table>
+        <thead>
+          <tr><th>Produto</th><th>Qtd</th><th>Unit.</th><th>Subtotal</th><th></th></tr>
+        </thead>
+        <tbody id="carrinho"></tbody>
+      </table>
+    </div>
+
+    <p class="total">Total: <span id="totalVenda">R$ 0,00</span></p>
+
+    <div class="linha">
+      <select id="pagamento">
+        <option>Dinheiro</option>
+        <option>Pix</option>
+        <option>Cartão de débito</option>
+        <option>Cartão de crédito</option>
+      </select>
+      <button onclick="finalizar()">Finalizar venda</button>
+      <button class="sec" onclick="limparCarrinho()">Limpar</button>
+    </div>
+  </div>
+
+  <!-- EXTRATO -->
+  <div class="card">
+    <h2>Extrato</h2>
+    <div class="tabela">
+      <table>
+        <thead>
+          <tr><th>Data</th><th>Itens</th><th>Pagamento</th><th>Valor</th><th>Saldo</th></tr>
+        </thead>
+        <tbody id="extrato"></tbody>
+      </table>
+    </div>
+    <p class="total">Saldo total: <span id="saldoTotal">R$ 0,00</span></p>
+    <button class="perigo" onclick="limparExtrato()">Limpar extrato</button>
+  </div>
+
+  <!-- CADASTRO DE PRODUTO -->
+  <div class="card">
+    <h2>Cadastrar produto</h2>
+    <div class="linha">
+      <input type="text" id="novoNome" placeholder="Nome do produto">
+      <input type="text" id="novoPreco" placeholder="Preço (ex: 49,90)" inputmode="decimal">
+      <button onclick="cadastrarProduto()">Cadastrar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const CHAVE = "casaRacao";
+
+  // Produtos iniciais (você pode trocar por outros)
+  let produtos = [
+    { id: 1, nome: "Ração Cães Adultos 15kg", preco: 149.90 },
+    { id: 2, nome: "Ração Filhotes 10kg", preco: 119.90 },
+    { id: 3, nome: "Ração Gatos Castrados 10kg", preco: 139.90 },
+    { id: 4, nome: "Areia Higiênica 4kg", preco: 18.90 },
+    { id: 5, nome: "Petisco Bifinho 500g", preco: 24.90 },
+    { id: 6, nome: "Coleira Tamanho M", preco: 29.90 },
+    { id: 7, nome: "Antipulgas", preco: 79.90 }
+  ];
+  let carrinho = [];
+  let extrato = [];
+
+  // ---------- utilidades ----------
+  const moeda = v => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+  // evita que texto digitado vire HTML
+  const esc = t => String(t).replace(/[&<>"']/g, c =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  function salvar() {
+    try { localStorage.setItem(CHAVE, JSON.stringify({ produtos, extrato })); } catch (e) {}
+  }
+
+  function carregar() {
+    try {
+      const salvo = JSON.parse(localStorage.getItem(CHAVE));
+      if (salvo) { produtos = salvo.produtos; extrato = salvo.extrato; }
+    } catch (e) {}
+  }
+
+  // ---------- produtos ----------
+  function renderProdutos() {
+    document.getElementById("produto").innerHTML = produtos
+      .map(p => `<option value="${p.id}">${esc(p.nome)} — ${moeda(p.preco)}</option>`)
+      .join("");
+  }
+
+  function cadastrarProduto() {
+    const nome = document.getElementById("novoNome").value.trim();
+    const preco = parseFloat(document.getElementById("novoPreco").value.replace(",", "."));
+    if (!nome || !(preco > 0)) { alert("Informe um nome e um preço válido."); return; }
+
+    produtos.push({ id: Date.now(), nome, preco });
+    salvar();
+    renderProdutos();
+    document.getElementById("novoNome").value = "";
+    document.getElementById("novoPreco").value = "";
+  }
+
+  // ---------- carrinho ----------
+  function adicionar() {
+    const id = Number(document.getElementById("produto").value);
+    const qtd = parseInt(document.getElementById("qtd").value);
+    const prod = produtos.find(p => p.id === id);
+
+    if (!prod) { alert("Cadastre um produto primeiro."); return; }
+    if (!qtd || qtd < 1) { alert("Quantidade inválida."); return; }
+
+    const existente = carrinho.find(i => i.id === id);
+    if (existente) existente.qtd += qtd;
+    else carrinho.push({ id: prod.id, nome: prod.nome, preco: prod.preco, qtd });
+
+    document.getElementById("qtd").value = 1;
+    renderCarrinho();
+  }
+
+  function removerItem(indice) {
+    carrinho.splice(indice, 1);
+    renderCarrinho();
+  }
+
+  function limparCarrinho() {
+    carrinho = [];
+    renderCarrinho();
+  }
+
+  function renderCarrinho() {
+    const corpo = document.getElementById("carrinho");
+    if (carrinho.length === 0) {
+      corpo.innerHTML = `<tr><td colspan="5" class="vazio">Nenhum item adicionado.</td></tr>`;
+    } else {
+      corpo.innerHTML = carrinho.map((i, n) => `
+        <tr>
+          <td>${esc(i.nome)}</td>
+          <td>${i.qtd}</td>
+          <td>${moeda(i.preco)}</td>
+          <td>${moeda(i.preco * i.qtd)}</td>
+          <td><button class="perigo" onclick="removerItem(${n})">✕</button></td>
+        </tr>`).join("");
+    }
+    const total = carrinho.reduce((soma, i) => soma + i.preco * i.qtd, 0);
+    document.getElementById("totalVenda").textContent = moeda(total);
+  }
+
+  // ---------- venda e extrato ----------
+  function finalizar() {
+    if (carrinho.length === 0) { alert("O carrinho está vazio."); return; }
+
+    const total = carrinho.reduce((soma, i) => soma + i.preco * i.qtd, 0);
+    extrato.push({
+      data: new Date().toLocaleString("pt-BR"),
+      itens: carrinho.map(i => `${i.qtd}x ${i.nome}`).join(", "),
+      pagamento: document.getElementById("pagamento").value,
+      total
+    });
+
+    carrinho = [];
+    salvar();
+    renderCarrinho();
+    renderExtrato();
+  }
+
+  function renderExtrato() {
+    const corpo = document.getElementById("extrato");
+    let saldo = 0;
+
+    if (extrato.length === 0) {
+      corpo.innerHTML = `<tr><td colspan="5" class="vazio">Nenhuma venda registrada.</td></tr>`;
+    } else {
+      corpo.innerHTML = extrato.map(v => {
+        saldo += v.total; // saldo acumulado
+        return `
+          <tr>
+            <td>${esc(v.data)}</td>
+            <td>${esc(v.itens)}</td>
+            <td>${esc(v.pagamento)}</td>
+            <td>${moeda(v.total)}</td>
+            <td>${moeda(saldo)}</td>
+          </tr>`;
+      }).join("");
+    }
+    document.getElementById("saldoTotal").textContent = moeda(saldo);
+  }
+
+  function limparExtrato() {
+    if (confirm("Apagar todo o extrato?")) {
+      extrato = [];
+      salvar();
+      renderExtrato();
+    }
+  }
+
+  // ---------- início ----------
+  carregar();
+  renderProdutos();
+  renderCarrinho();
+  renderExtrato();
+</script>
+</body>
+</html>
